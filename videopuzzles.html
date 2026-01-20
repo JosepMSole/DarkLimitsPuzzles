@@ -1,0 +1,337 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Video Puzzles</title>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&display=swap" rel="stylesheet">
+  <style>
+    :root{
+      --card-w: min(980px, 94vw);
+      --radius: 20px;
+      --shadow: 0 18px 60px rgba(0,0,0,.55);
+      --green: #21ff9a;
+      --red: #ff3b3b;
+    }
+    html, body { height: 100%; margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, "Helvetica Neue", Arial; color: #fff; overflow: hidden; }
+    body { background: url("assets/puzzle5.jpg") center / cover no-repeat fixed; position: relative; }
+
+    /* Capa oscura + desenfoque del fondo */
+    .veil { position: absolute; inset: 0; background: rgba(0,0,0,.55); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); z-index: 0; }
+
+    /* Contenedor centrado */
+    .center { position: relative; z-index: 1; height: 100%; display: grid; place-items: center; padding: 24px; }
+
+    .stage { width: var(--card-w); aspect-ratio: 16 / 9; border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; position: relative; background: rgba(0,0,0,.25); }
+
+    /* Video (solo visible tras password correcto) */
+    #videoHost { position: absolute; inset: 0; background: #000; display: none; z-index: 1; }
+    #videoHost iframe { width: 100%; height: 100%; border: 0; display:block; }
+
+    /* Overlay con thumbnail + UI de password */
+    .lockLayer { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(0,0,0,.20); z-index: 2; }
+    .thumb { position: absolute; inset: 0; background: url("assets/thumbnailvideo.jpg") center / cover no-repeat; filter: saturate(1.05) contrast(1.05); transform: scale(1.02); opacity: .92; }
+
+    /* Caja de acceso: más grande y más transparente, con blur */
+    .ui {
+      position: relative;
+      z-index: 2;
+      width: min(720px, 92%);
+      display: grid;
+      gap: 14px;
+      padding: 22px 22px 18px;
+      border-radius: 18px;
+      background: rgba(0,0,0,.28); /* menos oscura */
+      border: 1px solid rgba(255,255,255,.12);
+      box-shadow: 0 10px 40px rgba(0,0,0,.40);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+    }
+
+    .title { font-weight: 900; letter-spacing: .18em; text-transform: uppercase; font-size: 18px; font-family: 'Orbitron', 'JetBrains Mono', 'Courier New', monospace; display: flex; justify-content: space-between; align-items:center; gap:10px; opacity:.95; }
+    .status {
+      font-weight: 900;
+      letter-spacing: .12em;
+      font-size: 12px;
+      padding: 7px 12px;
+      border-radius: 999px;
+      background: rgba(255,255,255,.10);
+      border: 1px solid rgba(255,255,255,.14);
+      text-transform: uppercase;
+      user-select:none;
+    }
+
+    /* Fade in/out lento para BLOQUEADO */
+    .lockedPulse {
+      animation: lockedPulse 2.8s ease-in-out infinite;
+    }
+    @keyframes lockedPulse{
+      0%{ opacity: .35; }
+      50%{ opacity: 1; }
+      100%{ opacity: .35; }
+    }
+
+    .row { display: grid; grid-template-columns: 1fr auto; gap: 12px; }
+
+    input {
+      padding: 14px 16px;
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,.22);
+      background: rgba(0,0,0,.40);
+      color: #fff;
+      outline: none;
+      letter-spacing: .05em;
+      font-size: 15px;
+    }
+    input::placeholder{ color: rgba(255,255,255,.65); }
+    input:focus{ border-color: rgba(255,255,255,.50); }
+
+    button {
+      padding: 14px 18px;
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,.22);
+      background: rgba(255,255,255,.18);
+      color: #fff;
+      cursor: pointer;
+      font-weight: 900;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      user-select:none;
+    }
+    button:hover{ background: rgba(255,255,255,.24); }
+    button:active{ transform: translateY(1px); }
+
+    .msgArea { min-height: 24px; font-size: 15px; letter-spacing: .02em; }
+    .msgArea .ok { font-weight: 900; color: var(--green); }
+    .msgArea .bad { font-weight: 900; color: var(--red); }
+
+    /* Estado denegado: rojo */
+    .denied .status { background: rgba(255,59,59,.22); border-color: rgba(255,59,59,.65); }
+    /* Estado permitido: verde */
+    .allowed .status { background: rgba(33,255,154,.16); border-color: rgba(33,255,154,.55); }
+
+    /* Pistas */
+    .hint { position: absolute; top: 18px; left: 50%; transform: translateX(-50%); z-index: 3; width: min(900px, 94%); pointer-events:none; display:grid; place-items:center; }
+    .hintBubble {
+      max-width: 100%;
+      padding: 10px 14px;
+      border-radius: 999px;
+      background: rgba(0,0,0,.55);
+      border: 1px solid rgba(255,255,255,.14);
+      box-shadow: 0 12px 35px rgba(0,0,0,.45);
+      font-size: 13px;
+      letter-spacing: .03em;
+      text-align:center;
+      animation: hintInOut 5s ease-in-out forwards; /* TOTAL 5s */
+      will-change: transform, opacity;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+    }
+    @keyframes hintInOut{
+      0%   { opacity: 0; transform: translateY(-10px) scale(.98); }
+      12%  { opacity: 1; transform: translateY(0px) scale(1); }
+      80%  { opacity: 1; transform: translateY(0px) scale(1); }
+      100% { opacity: 0; transform: translateY(-10px) scale(.98); }
+    }
+
+    /* Flash verde pantalla completa (1s) */
+    .flash {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      background: rgba(33,255,154,.0);
+      pointer-events: none;
+      opacity: 0;
+      display: none;
+    }
+    .flash.on {
+      display: block;
+      animation: flashGreen 1s ease-out forwards;
+    }
+    @keyframes flashGreen{
+      0%   { opacity: 0; background: rgba(33,255,154,.0); }
+      10%  { opacity: 1; background: rgba(33,255,154,.35); }
+      60%  { opacity: 1; background: rgba(33,255,154,.22); }
+      100% { opacity: 0; background: rgba(33,255,154,.0); }
+    }
+
+    /* Aviso de file:// (solo se muestra si aplica) */
+    .warn {
+      font-size: 12px;
+      opacity: .8;
+      line-height: 1.35;
+      margin-top: 2px;
+    }
+    .warn strong { font-weight: 900; }
+  </style>
+</head>
+<body>
+  <div class="veil"></div>
+  <div class="flash" id="flash"></div>
+
+  <div class="center">
+    <div class="stage">
+      <div class="hint" id="hintHost" aria-live="polite"></div>
+
+      <div id="videoHost"></div>
+
+      <div class="lockLayer" id="lockLayer">
+        <div class="thumb" aria-hidden="true"></div>
+
+        <div class="ui" id="uiBox">
+          <div class="title">
+            <span>Acceso al vídeo</span>
+            <span class="status lockedPulse" id="status">BLOQUEADO</span>
+          </div>
+
+          <div class="row">
+            <input id="pw" type="password" placeholder="Introduce el password…" autocomplete="off" />
+            <button id="btn" type="button">Entrar</button>
+          </div>
+
+          <div class="msgArea" id="msg"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <audio id="ok" src="assets/accesopermitido.mp3" preload="auto"></audio>
+  <audio id="no" src="assets/accesoincorrecto.mp3" preload="auto"></audio>
+
+  <script>
+    (() => {
+      const PASSWORD = "LOSPORTALES";
+
+      const hints = [
+        "El password lo encontrarás al final del juego Dark Limits Puzzles",
+        "No hagas trampas... o la sabes, o no la sabes...",
+        "¿Has probado el juego Dark Limits Puzzles?",
+        "Descubre los eventos de Dark Limits Prelude..."
+      ];
+      const wrong = ["INCORRECTO", "NOPE!", "ESTA NO VALE"];
+
+      const hintHost  = document.getElementById("hintHost");
+      const videoHost = document.getElementById("videoHost");
+      const lockLayer = document.getElementById("lockLayer");
+      const uiBox     = document.getElementById("uiBox");
+      const statusEl  = document.getElementById("status");
+      const msgEl     = document.getElementById("msg");
+      const pwEl      = document.getElementById("pw");
+      const btnEl     = document.getElementById("btn");
+      const flashEl   = document.getElementById("flash");
+      const okAudio = document.getElementById("ok");
+      const noAudio = document.getElementById("no");
+
+      let unlocked = false;
+      let lastHintIndex = -1;
+      let hintIntervalId = null;
+
+      const pickIndexNoRepeat = (arrLen, lastIdx) => {
+        if (arrLen <= 1) return 0;
+        let i = Math.floor(Math.random() * arrLen);
+        while (i === lastIdx) i = Math.floor(Math.random() * arrLen);
+        return i;
+      };
+
+      function showHint(){
+        if (unlocked) return;
+
+        const idx = pickIndexNoRepeat(hints.length, lastHintIndex);
+        lastHintIndex = idx;
+
+        const bubble = document.createElement("div");
+        bubble.className = "hintBubble";
+        bubble.textContent = `"${hints[idx]}"`;
+        hintHost.appendChild(bubble);
+
+        setTimeout(() => bubble.remove(), 5050);
+      }
+
+      function setState(state){ // locked | denied | allowed
+        uiBox.classList.remove("denied","allowed");
+        if (state === "denied") uiBox.classList.add("denied");
+        if (state === "allowed") uiBox.classList.add("allowed");
+      }
+
+      function setMsg(text, kind){ // "ok" | "bad"
+        msgEl.innerHTML = text ? `<span class="${kind}">${text}</span>` : "";
+      }
+
+      function play(audioEl){
+        try{
+          audioEl.currentTime = 0;
+          const p = audioEl.play();
+          if (p && typeof p.catch === "function") p.catch(() => {});
+        } catch(e) {}
+      }
+
+      function deny(){
+        setState("denied");
+        statusEl.classList.remove("lockedPulse");
+        statusEl.textContent = "DENEGADO";
+        setMsg(wrong[Math.floor(Math.random()*wrong.length)], "bad");
+        pwEl.value = ""; // vaciar input tras error
+        play(noAudio);
+      }
+
+      function flashGreen(){
+        flashEl.classList.remove("on");
+        // restart
+        void flashEl.offsetWidth;
+        flashEl.classList.add("on");
+        setTimeout(() => {
+          flashEl.classList.remove("on");
+        }, 1000);
+      }
+
+      function allow(){
+        unlocked = true;
+        if (hintIntervalId) clearInterval(hintIntervalId);
+
+        setState("allowed");
+        statusEl.classList.remove("lockedPulse");
+        statusEl.textContent = "ACCESO PERMITIDO";
+        setMsg("ACCESO PERMITIDO", "ok");
+        play(okAudio);
+
+        // Flash verde 1s, manteniendo visible el mensaje
+        flashGreen();
+
+        // Inyectar embed (mejor compatibilidad y privacidad)
+        // Nota: si el vídeo tiene "embedding disabled" por el autor, no hay forma de forzarlo desde HTML.
+        videoHost.innerHTML = `
+<iframe
+  src="https://www.youtube-nocookie.com/embed/p7rgwumkQEE?rel=0&modestbranding=1&playsinline=1"
+  title="YouTube video player"
+  frameborder="0"
+  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+  allowfullscreen>
+</iframe>`;
+
+        // Tras el flash, eliminar todo el menú/pistas y dejar solo el vídeo
+        setTimeout(() => {
+          hintHost.remove();
+          lockLayer.remove();
+          videoHost.style.display = "block";
+        }, 1000);
+      }
+
+      function check(){
+        if (unlocked) return;
+        const val = (pwEl.value || "").trim();
+        if (val === PASSWORD) allow();
+        else deny();
+      }
+
+      btnEl.addEventListener("click", check);
+      pwEl.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") check();
+      });
+
+      // Pistas: cada una dura 5s y se lanza cada 5s (sin solaparse)
+      showHint();
+      hintIntervalId = setInterval(showHint, 5000);
+    })();
+  </script>
+</body>
+</html>
