@@ -458,6 +458,9 @@
   <!-- Post-level overlay -->
   <div id="postOverlay" class="postOverlay" aria-hidden="true">
     <video id="postVideo" playsinline preload="auto"></video>
+    <div id="postGate" class="startGate" aria-hidden="false">
+      <button id="postBtn" class="startBtn" type="button">Toca para continuar</button>
+    </div>
   </div>
 
   <!-- Background -->
@@ -545,6 +548,8 @@
 
   const postOverlay = $("postOverlay");
   const postVideo = $("postVideo");
+  const postGate = $("postGate");
+  const postBtn = $("postBtn");
 
   // ========= Safe play helper =========
   function tryPlay(media){
@@ -1411,31 +1416,19 @@
     // Prevent interactions
     stage.classList.add("disabled");
     windows.style.pointerEvents = "none";
-
-    // Autoplay fallback: tap-to-start using intro gate (reuse UI)
-    startGate.classList.remove("on");
-    startBtn.textContent = "Toca para continuar";
-    introOverlay.classList.remove("hidden");
-    introOverlay.style.zIndex = "99999";
-    introVideo.style.display = "none";
-    introImg.style.display = "none";
-
-    // Put gate above postOverlay, but let user start playback.
-    startGate.classList.add("on");
-
-    const startPlayback = async () => {
-      startGate.classList.remove("on");
-      introOverlay.classList.add("hidden");
-      await tryPlay(postVideo);
-    };
-
-    // If autoplay works, hide gate immediately.
+    // Autoplay fallback (sin reutilizar la intro)
+    if (postGate) postGate.classList.remove("on");
     await tryPlay(postVideo);
-    if (!postVideo.paused){
-      startGate.classList.remove("on");
-      introOverlay.classList.add("hidden");
+    if (postVideo.paused){
+      if (postGate) postGate.classList.add("on");
+      if (postBtn){
+        postBtn.onclick = async () => {
+          if (postGate) postGate.classList.remove("on");
+          await tryPlay(postVideo);
+        };
+      }
     } else {
-      startBtn.onclick = startPlayback;
+      if (postGate) postGate.classList.remove("on");
     }
 
     await new Promise((resolve) => {
@@ -1449,6 +1442,7 @@
       if (levelIndex === LEVELS.length - 1){
         showBonusHint();
       }
+      if (postGate) postGate.classList.remove("on");
       postOverlay.classList.remove("on");
       postVideo.pause();
       postVideo.src = "";
@@ -1462,6 +1456,7 @@
     } else {
       // Último nivel: volver al menú directamente
       gameCompletedAll = true;
+      if (postGate) postGate.classList.remove("on");
       postOverlay.classList.remove("on");
       postVideo.pause();
       postVideo.src = "";
@@ -1488,29 +1483,24 @@
 
     windows.style.pointerEvents = "none";
     stage.classList.add("disabled");
-
-    // Autoplay fallback
-    startGate.classList.remove("on");
-    startBtn.textContent = "Toca para ver el vídeo final";
-    introOverlay.classList.remove("hidden");
-    introOverlay.style.zIndex = "99999";
-    introVideo.style.display = "none";
-    introImg.style.display = "none";
-    startGate.classList.add("on");
-
+    // Autoplay fallback (sin reutilizar la intro)
+    if (postGate) postGate.classList.remove("on");
     await tryPlay(postVideo);
-    if (!postVideo.paused){
-      startGate.classList.remove("on");
-      introOverlay.classList.add("hidden");
+    if (postVideo.paused){
+      if (postGate) postGate.classList.add("on");
+      if (postBtn){
+        postBtn.onclick = async () => {
+          if (postGate) postGate.classList.remove("on");
+          await tryPlay(postVideo);
+        };
+      }
     } else {
-      startBtn.onclick = async () => {
-        startGate.classList.remove("on");
-        introOverlay.classList.add("hidden");
-        await tryPlay(postVideo);
-      };
+      if (postGate) postGate.classList.remove("on");
     }
 
     await new Promise((resolve) => { postVideo.onended = () => resolve(); });
+
+    if (postGate) postGate.classList.remove("on");
 
     postOverlay.classList.remove("on");
     postVideo.pause();
