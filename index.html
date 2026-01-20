@@ -200,6 +200,9 @@
     }
     .windowBody{ padding:12px; }
 
+    .window.collapsed .windowBody{ display:none; }
+
+
     .closeBtn{
       width:28px; height:28px;
       border-radius:10px;
@@ -507,7 +510,7 @@
     { key:"3",     name:"Puzzle 3",     img:ASSETS+"puzzle3.jpg",     bg:ASSETS+"bglevel3.webm", audio:ASSETS+"audio3.mp3", pieces: 25 },
     { key:"4",     name:"Puzzle 4",     img:ASSETS+"puzzle4.jpg",     bg:ASSETS+"bglevel4.webm", audio:ASSETS+"audio4.mp3", pieces: 36 },
     { key:"5",     name:"Puzzle 5",     img:ASSETS+"puzzle5.jpg",     bg:ASSETS+"bglevel5.webm", audio:ASSETS+"audio5.mp3", pieces: 49 },
-    { key:"bonus", name:"Puzzle Bonus", img:ASSETS+"puzzlebonus.jpg", bg:ASSETS+"bglevel6.webm", audio:ASSETS+"audio6.mp3", pieces: 64 },
+    { key:"bonus", name:"Puzzle Bonus", img:ASSETS+"puzzlebonus.jpg", bg:ASSETS+"bgmenu.webm", audio:ASSETS+"audio6.mp3", pieces: 64 },
   ];
 
   const MENU_BG = ASSETS + "bgmenu.webm";
@@ -761,6 +764,8 @@
       introImg.className = "introImgZoom";
       await new Promise(r => setTimeout(r, 2000));
       introOverlay.classList.add("hidden");
+      // Evita que la intro reaparezca en cualquier circunstancia
+      try{ introOverlay.remove(); }catch(e){}
       enterMenu();
       return;
     }
@@ -1268,6 +1273,25 @@
     });
     controlWin.classList.add("controlsCompact");
 
+    // Botón de colapsar controles (no afecta a Piezas/Encajadas/Tiempo)
+    (function(){
+      const header = controlWin.querySelector(".windowHeader");
+      if (!header) return;
+      const btn = document.createElement("button");
+      btn.className = "closeBtn";
+      btn.type = "button";
+      btn.title = "Colapsar/Expandir";
+      btn.textContent = "▾";
+      btn.style.marginLeft = "8px";
+      header.appendChild(btn);
+
+      btn.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        const isCollapsed = controlWin.classList.toggle("collapsed");
+        btn.textContent = isCollapsed ? "▸" : "▾";
+      });
+    })();
+
     const tableroWin = makeWindow({
       id: "tablero",
       title: "Tablero",
@@ -1413,6 +1437,11 @@
     postVideo.src = postVideoForLevel(levelIndex);
     postVideo.load();
 
+    const postErrorPromise = new Promise((resolve) => {
+      postVideo.onerror = () => resolve("error");
+      postVideo.onabort = () => resolve("abort");
+    });
+
     // Prevent interactions
     stage.classList.add("disabled");
     windows.style.pointerEvents = "none";
@@ -1431,9 +1460,8 @@
       if (postGate) postGate.classList.remove("on");
     }
 
-    await new Promise((resolve) => {
-      postVideo.onended = () => resolve();
-    });
+    const postEndPromise = new Promise((resolve) => { postVideo.onended = () => resolve("ended"); });
+    await Promise.race([postEndPromise, postErrorPromise]);
 
     // Continue flow
     if (levelIndex < LEVELS.length - 1){
@@ -1481,6 +1509,11 @@
     postVideo.src = postVideoForLevel(LEVELS.length - 1);
     postVideo.load();
 
+    const postErrorPromise = new Promise((resolve) => {
+      postVideo.onerror = () => resolve("error");
+      postVideo.onabort = () => resolve("abort");
+    });
+
     windows.style.pointerEvents = "none";
     stage.classList.add("disabled");
     // Autoplay fallback (sin reutilizar la intro)
@@ -1498,7 +1531,8 @@
       if (postGate) postGate.classList.remove("on");
     }
 
-    await new Promise((resolve) => { postVideo.onended = () => resolve(); });
+    const postEndPromise = new Promise((resolve) => { postVideo.onended = () => resolve("ended"); });
+    await Promise.race([postEndPromise, postErrorPromise]);
 
     if (postGate) postGate.classList.remove("on");
 
