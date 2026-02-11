@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>DARK LIMITS – Puzzle (v0.4)</title>
+  <title>DARK LIMITS – Puzzle (v1.2)</title>
   <style>
     :root{
       --text:#e8ecff;
@@ -26,6 +26,63 @@
     }
 
     /* ===== Intro (mandatory) ===== */
+/* ===== Pre-start gate (v1.2) ===== */
+.preStart{
+  position:fixed; inset:0;
+  z-index:100000;
+  background:#000;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+.preStart.hidden{ display:none; }
+.preStartInner{
+  width:min(420px, 82vw);
+  display:flex;
+  flex-direction:column;
+  gap:14px;
+  align-items:stretch;
+  justify-content:center;
+}
+.preStartIco{
+  width:100%;
+  height:auto;
+  display:block;
+  image-rendering:auto;
+}
+.preStartBtn{
+  width:100%;
+  appearance:none;
+  border:none;
+  background:#ff4fa3;
+  color:#000;
+  padding:16px 18px;
+  border-radius:18px;
+  cursor:pointer;
+  font-weight:900;
+  letter-spacing:.6px;
+  font-size:18px;
+  box-shadow: 0 16px 50px rgba(0,0,0,0.55);
+}
+.preStartBtn:active{ transform: translateY(1px); }
+
+/* ===== Desktop-only lock (v1.2) ===== */
+.mobileBlockImg{
+  width:100%;
+  height:100%;
+  object-fit:contain;
+  display:block;
+  background:#000;
+}
+
+/* ===== Centered modal window helper (v1.2) ===== */
+.window.centerModal{
+  position:fixed !important;
+  left:50% !important;
+  top:50% !important;
+  transform: translate(-50%, -50%) !important;
+  margin:0 !important;
+}
     .overlayFull{
       position:fixed; inset:0;
       z-index:99999;
@@ -449,8 +506,22 @@
   </style>
 </head>
 <body>
+
+<!-- Pre-start overlay (v1.2) -->
+<div id="preStartOverlay" class="preStart" aria-hidden="false">
+  <div class="preStartInner">
+    <img class="preStartIco" src="ICO.ico" alt="ICO" />
+    <button id="preStartBtn" class="preStartBtn" type="button">INICIAR</button>
+  </div>
+</div>
+
+<!-- Desktop only block (shown if mobile detected after INICIAR) -->
+<div id="mobileBlock" class="overlayFull hidden" aria-hidden="true">
+  <img class="mobileBlockImg" src="assets/EXCLUSIVO_DESKTOP.jpg" alt="EXCLUSIVO DESKTOP" />
+</div>
+
   <!-- Intro overlay -->
-  <div id="introOverlay" class="overlayFull" aria-hidden="false">
+  <div id="introOverlay" class="overlayFull hidden" aria-hidden="true">
     <video id="introVideo" playsinline preload="auto"></video>
     <img id="introImg" alt="Disturbing Games" style="display:none;" />
     <div id="startGate" class="startGate" aria-hidden="false">
@@ -468,7 +539,7 @@
 
   <!-- Background -->
   <div class="bg" aria-hidden="true">
-    <video id="bgVideo" autoplay muted loop playsinline></video>
+    <video id="bgVideo" muted loop playsinline></video>
   </div>
 
   <!-- Audio -->
@@ -844,6 +915,13 @@
           <a class="btnlink" href="https://www.disturbingstories.com/dark-limits-prelude.html" target="_blank" rel="noopener">Descubre DARK LIMITS</a>
         </div>
 
+        
+        <div class="audioRow" style="justify-content:center; margin-top:18px;">
+          <button id="menuAudioToggle">🔊</button>
+          <label for="menuAudioVol">Vol</label>
+          <input id="menuAudioVol" type="range" min="0" max="1" step="0.01" value="0.65" />
+        </div>
+
         <div class="menuFooter" style="margin-top:14px; padding-top:12px;">
           © Disturbing Stories 2026 / Vianda Visual /
           <a class="pillLink" href="https://www.disturbingstories.com" target="_blank" rel="noopener">www.disturbingstories.com</a>
@@ -911,6 +989,26 @@
         levelIndex = 0;
         buildMenu();
       };
+    }
+
+
+    const menuAudioToggle = document.getElementById("menuAudioToggle");
+    const menuAudioVol = document.getElementById("menuAudioVol");
+
+    if (menuAudioVol){
+      menuAudioVol.value = lastBgVolume ?? 0.65;
+      bgAudio.volume = Number(menuAudioVol.value);
+      menuAudioVol.addEventListener("input", () => {
+        lastBgVolume = Number(menuAudioVol.value);
+        bgAudio.volume = lastBgVolume;
+      });
+    }
+
+    if (menuAudioToggle){
+      menuAudioToggle.textContent = audioEnabled ? "🔊" : "🔇";
+      menuAudioToggle.addEventListener("click", () => {
+        toggleAudio(null, menuAudioToggle);
+      });
     }
 
     if (btnFinal){
@@ -1398,6 +1496,8 @@
         y: Math.round((window.innerHeight - 320)/2),
         w: Math.min(560, window.innerWidth - 24),
         closable:false,
+        draggable:false,
+        showHeader:false,
         contentHTML: `
           <div class="completeWrap">
             <img class="completeImg" src="${imgSrc}" alt="Completado" />
@@ -1408,9 +1508,11 @@
           </div>
         `
       });
+      try{ w.classList.add("centerModal"); }catch(e){}
     } else {
       w.style.display="block";
       w.style.zIndex = String(++winZ);
+      try{ w.classList.add("centerModal"); }catch(e){}
       const imgEl = w.querySelector(".completeImg");
       if (imgEl) imgEl.src = imgSrc;
       const btn = w.querySelector("#btnNextFlow");
@@ -1702,10 +1804,44 @@
   });
 
   // ========= INIT =========
-  (async () => {
-    // Start mandatory intro, then menu
-    await runIntroThenMenu();
-  })();
+  // ========= PRE-START (v1.2) =========
+const preStartOverlay = $("preStartOverlay");
+const preStartBtn = $("preStartBtn");
+const mobileBlock = $("mobileBlock");
+
+function lockToDesktopOnly(){
+  // Hide everything else and show the desktop-only image
+  try{ introOverlay.classList.add("hidden"); introOverlay.setAttribute("aria-hidden","true"); }catch(e){}
+  try{ postOverlay.classList.remove("on"); postOverlay.setAttribute("aria-hidden","true"); }catch(e){}
+  try{ bgVideo.pause(); }catch(e){}
+  try{ bgAudio.pause(); }catch(e){}
+  try{ stage.style.display = "none"; }catch(e){}
+  try{ windows.style.display = "none"; }catch(e){}
+  if (preStartOverlay) preStartOverlay.classList.add("hidden");
+  if (mobileBlock){
+    mobileBlock.classList.remove("hidden");
+    mobileBlock.setAttribute("aria-hidden","false");
+  }
+}
+
+async function startAfterGate(){
+  if (isMobile){
+    lockToDesktopOnly();
+    return;
+  }
+  // Show intro + run normal flow
+  if (preStartOverlay){
+    preStartOverlay.classList.add("hidden");
+    preStartOverlay.setAttribute("aria-hidden","true");
+  }
+  introOverlay.classList.remove("hidden");
+  introOverlay.setAttribute("aria-hidden","false");
+  await runIntroThenMenu();
+}
+
+if (preStartBtn){
+  preStartBtn.addEventListener("click", () => { startAfterGate(); }, { once:true });
+}
 })();
 </script>
 </body>
